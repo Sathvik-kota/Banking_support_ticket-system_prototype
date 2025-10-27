@@ -1,21 +1,42 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import asyncio
-from openai import AsyncOpenAI  # Import modern async client
+import google.generativeai as genai  # Import Google Gemini
 import os
 import json
 from uuid import uuid4
 
-# Initialize the Async OpenAI client
+# --- Gemini API Initialization ---
 try:
-    client = AsyncOpenAI()
-    if not client.api_key:
-        raise ValueError("OPENAI_API_KEY environment variable not set.")
+    # Google's SDK automatically looks for the GOOGLE_API_KEY env variable
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY environment variable not set.")
+    
+    genai.configure(api_key=api_key)
+    
+    # Set up the model
+    generation_config = {
+        "temperature": 0.3,
+        "top_p": 1,
+        "top_k": 1,
+        "max_output_tokens": 2048,
+        "response_mime_type": "application/json", # Force JSON output
+    }
+    
+    model = genai.GenerativeModel(
+        model_name="gemini-2.5-flash", # Use the correct, stable model name
+        generation_config=generation_config,
+    )
+    print("Google Gemini client initialized successfully (Async Service).")
+    
 except Exception as e:
-    print(f"Error initializing AsyncOpenAI client: {e}")
-    client = None
+    print(f"Error initializing Google Gemini client (Async Service): {e}")
+    model = None
+# --- End of Gemini Initialization ---
 
-app = FastAPI(title="Async Ticket Service (Queue + Workers)")
+
+app = FastAPI(title="Async Ticket Service (Queue + Workers) - GEMINI MODE")
 
 # In-memory queue and result store
 ticket_queue = asyncio.Queue()
@@ -35,6 +56,8 @@ Classify this ticket into:
 1. AI Code Patch
 2. Vibe Workflow
 Return a single, valid JSON object with 'decision', 'reason', and 'next_actions' (as a list of strings).
+Do not return markdown (```json ... ```), just the raw JSON object.
+
 Ticket:
 Channel: {ticket.channel}
 Severity: {ticket.severity}
@@ -44,28 +67,30 @@ Summary: {ticket.summary}
 # Worker function
 async def worker(worker_id: int):
     print(f"Worker {worker_id} starting...")
-    if not client:
-        print(f"Worker {worker_id}: OpenAI client not initialized. Worker stopping.")
+    if not model:
+        print(f"Worker {worker_id}: Gemini client not initialized. Worker stopping.")
         return
 
     while True:
         try:
             ticket_id, ticket = await ticket_queue.get()
-            print(f"Worker {worker_id} processing ticket {ticket_id}")
+            print(f"Worker {worker_id} processing ticket {ticket_id} (GEMINI MODE)")
             
             # Store initial status
             results_store[ticket_id] = {"status": "processing"}
 
             try:
                 prompt = create_prompt(ticket)
-                response = await client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.3,
-                    response_format={"type": "json_object"}
+                
+                # Run the blocking genai.generate_content call in a separate thread
+                # This is CRITICAL for an async worker.
+                response = await asyncio.to_thread(
+                    model.generate_content,
+                    prompt
                 )
                 
-                result_json = json.loads(response.choices[0].message.content)
+                result_json = json.loads(response.text)
+                
                 # Store the final, successful result
                 results_store[ticket_id] = {"status": "completed", "result": result_json}
                 
@@ -86,7 +111,7 @@ async def worker(worker_id: int):
 @app.on_event("startup")
 async def startup_event():
     # Start 3 async workers on app startup
-    print("Starting 3 workers...")
+    print("Starting 3 async workers (GEMINI MODE)...")
     for i in range(3):
         asyncio.create_task(worker(i))
 
@@ -103,3 +128,4 @@ async def async_ticket(ticket: Ticket):
 async def get_result(ticket_id: str):
     result = results_store.get(ticket_id, {"status": "pending"})
     return result
+
