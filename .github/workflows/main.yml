@@ -17,14 +17,14 @@ jobs:
 
       - name: Log in to Hugging Face Docker Registry
         # This uses the secrets you need to add to your GitHub repo
-        uses: docker/login-action@v3
+        uses: Docker/login-action@v3
         with:
           registry: registry.hf.space
           username: ${{ secrets.HF_USERNAME }}
           password: ${{ secrets.HF_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: Docker/build-push-action@v5
         with:
           context: .
           push: true
