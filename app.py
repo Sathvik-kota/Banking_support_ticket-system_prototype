@@ -23,7 +23,7 @@ with col1:
         severity_option = st.selectbox(
             "Severity (Determines Processing Path)", 
             [
-                "High (Sync service)", 
+                "High (Sync - service)", 
                 "Medium (Async - service)", 
                 "Low (Async - service)"
             ]
