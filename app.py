@@ -3,6 +3,10 @@ import requests
 import time
 import json
 
+# --- THIS IS THE NEW LINE ---
+st.set_page_config(layout="wide")
+# ----------------------------
+
 # ---------- Streamlit Layout ----------
 st.title("Banking Support Ticket System")
 st.subheader("Submit a Ticket")
@@ -161,4 +165,5 @@ with col2:
             st.error("API connection failed. Is the Orchestrator (port 8000) running?")
         except Exception as e:
             st.error(f"An unexpected error occurred: {e}")
+
 
