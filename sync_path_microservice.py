@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor
-from openai import OpenAI  # Import modern client
+from openai import OpenAI, AuthenticationError  # Import AuthenticationError
 import os
 import json
 
@@ -11,9 +11,10 @@ try:
     client = OpenAI()
     if not client.api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set.")
+    print("OpenAI client initialized successfully.")
 except Exception as e:
     print(f"Error initializing OpenAI client: {e}")
-    client = None 
+    client = None
 
 app = FastAPI(title="Sync Ticket Service (Threaded)")
 
@@ -43,30 +44,43 @@ Summary: {ticket.summary}
 # Call OpenAI
 def classify_ticket(ticket: Ticket):
     if not client:
+        print("!!! Error: classify_ticket called but OpenAI client is not initialized.")
         return {"status": "error", "detail": "OpenAI client not initialized."}
         
     try:
         prompt = create_prompt(ticket)
+        print(f"--- Sending prompt to OpenAI for sync ticket ---")
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             response_format={"type": "json_object"} # Enforce JSON output
         )
+        print("--- Received response from OpenAI ---")
         result_json = json.loads(response.choices[0].message.content)
         return result_json
+
+    except AuthenticationError as e:
+        # This is the most likely error. It will now be logged clearly.
+        print(f"!!! OpenAI Authentication Error: {e}")
+        return {"status": "error", "detail": f"OpenAI Authentication Error. Check your API key. Error: {e}"}
         
     except Exception as e:
+        # Log any other unexpected error
+        print(f"!!! Unexpected Error in classify_ticket: {e}")
         return {"status": "error", "detail": str(e)}
 
 # API endpoint
 @app.post("/sync_ticket")
 def sync_ticket(ticket: Ticket):
+    print(f"Received sync ticket: {ticket.summary}")
     # Run the blocking I/O call in a separate thread
     future = executor.submit(classify_ticket, ticket)
     result = future.result()
     
     if result.get("status") == "error":
+        print(f"--- Error processing sync ticket: {result.get('detail')} ---")
         raise HTTPException(status_code=500, detail=result.get("detail"))
     
+    print("--- Successfully processed sync ticket ---")
     return result
