@@ -84,8 +84,8 @@ Use the following past cases as context if relevant:
 ---
 
 Now classify this new ticket into:
-1. An AI-generated code patch
-2. A Vibe-coded troubleshooting workflow
+1. AI Code Patch
+2. Vibe Workflow
 3. General / Non-Issue — casual greetings, unclear, or unrelated messages.
 
 
