@@ -35,6 +35,10 @@ jobs:
           # we will change this line.
           context: . 
           
+          # --- THIS IS THE FIX ---
+          # We explicitly tell the builder where to find the Dockerfile
+          file: ./Dockerfile
+          
           push: true
           # This must match your HF Space ID (e.g., myname-myspace)
           tags: registry.hf.space/${{ secrets.HF_SPACE_ID }}:latest
