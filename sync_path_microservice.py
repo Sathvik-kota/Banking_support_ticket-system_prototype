@@ -1,60 +1,52 @@
+# ---------- sync_service.py ----------
 from fastapi import FastAPI
 from pydantic import BaseModel
+from concurrent.futures import ThreadPoolExecutor
 import openai
 import os
+import json
 
-# ---------- Set your OpenAI API key ----------
-openai.api_key = os.getenv("OPENAI_API_KEY")  # or set directly for testing
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-app = FastAPI(title="Sync Ticket Service")
+app = FastAPI(title="Sync Ticket Service (Threaded)")
 
-# ---------- Ticket Model ----------
+# Thread pool for parallel execution
+executor = ThreadPoolExecutor(max_workers=3)  # 3 threads for demo
+
+# Ticket model
 class Ticket(BaseModel):
     channel: str
     severity: str
     summary: str
 
-# ---------- Prompt Function ----------
+# Prompt builder
 def create_prompt(ticket: Ticket) -> str:
     return f"""
 You are an expert banking support assistant.
-
-Classify incoming support tickets into:
-1. AI-generated code remediation → requires writing or fixing code
-2. Vibe-script troubleshooting workflow → requires following a scripted procedure
-
-Analyze the ticket and provide:
-- decision: "AI Code Patch" or "Vibe Workflow"
-- reasoning (1–2 sentences)
-- 2–3 next actions
-
-Ticket Details:
+Classify this ticket into:
+1. AI Code Patch
+2. Vibe Workflow
+Return JSON with 'decision', 'reason', and 'next_actions'.
+Ticket:
 Channel: {ticket.channel}
 Severity: {ticket.severity}
 Summary: {ticket.summary}
-
-Respond in JSON format like this:
-{{
-  "decision": "<AI Code Patch or Vibe Workflow>",
-  "reason": "<short reasoning>",
-  "next_actions": ["<action 1>", "<action 2>", "<action 3>"]
-}}
 """
 
-# ---------- Sync Endpoint ----------
-@app.post("/sync_ticket")
-def sync_ticket(ticket: Ticket):
-    prompt = create_prompt(ticket)
+# Call OpenAI
+def classify_ticket(ticket: Ticket):
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
+            messages=[{"role": "user", "content": create_prompt(ticket)}],
+            temperature=0.3,
         )
-        result_text = response.choices[0].message.content
-        # Convert string response to JSON
-        import json
-        result_json = json.loads(result_text)
-        return result_json
+        return json.loads(response.choices[0].message.content)
     except Exception as e:
         return {"status": "error", "detail": str(e)}
+
+# API endpoint
+@app.post("/sync_ticket")
+def sync_ticket(ticket: Ticket):
+    future = executor.submit(classify_ticket, ticket)
+    return future.result()
