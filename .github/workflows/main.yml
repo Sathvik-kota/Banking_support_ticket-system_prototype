@@ -14,6 +14,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # --- NEW DEBUGGING STEP ---
+      # Add this step to see exactly what files are in your repository's root
+      - name: List files in the repository
+        run: ls -la
+      # --- END NEW STEP ---
+
       - name: Log in to Hugging Face Docker Registry
         uses: docker/login-action@v3
         with:
