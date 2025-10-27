@@ -43,6 +43,7 @@ def add_to_memory(ticket_text, response_text):
     except Exception as e:
         print(f"Error adding to memory: {e}")
 
+# --- MODIFIED: retrieve_context function ---
 def retrieve_context(query_text, top_k=2):
     if not memory_store or not embed_model:
         print("No memory or embed model, returning empty context.")
@@ -51,21 +52,24 @@ def retrieve_context(query_text, top_k=2):
         query_emb = embed_model.encode(query_text, convert_to_tensor=True)
         sims = [util.cos_sim(query_emb, item["embedding"]).item() for item in memory_store]
         
-        relevant_indices = [i for i, sim in enumerate(sims) if sim > 0.5]
-        top_indices = sorted(relevant_indices, key=lambda i: sims[i], reverse=True)[:top_k]
+        # --- FIX: Removed the "sim > 0.5" filter ---
+        # This now just finds the top_k indices, regardless of score.
+        # This is better for a prototype so you always see what it's retrieving.
+        top_indices = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
         
         if not top_indices:
-            print("No relevant context found.")
+            print("No context found (memory store was empty).")
             return ""
             
+        print(f"Top similarity scores found: {[sims[i] for i in top_indices]}")
         context = "\n\n".join([f"Past Ticket: {memory_store[i]['text']}\nResponse: {memory_store[i]['response']}" for i in top_indices])
         print(f"Retrieved context: {context}")
         return context
     except Exception as e:
         print(f"Error retrieving context: {e}")
         return ""
+# --- END MODIFIED ---
 
-# --- MODIFIED: Prompt builder now returns prompt AND context ---
 def create_rag_prompt(ticket: Ticket):
     """Creates the Gemini prompt and returns the prompt AND the context."""
     context = retrieve_context(ticket.summary)
@@ -88,9 +92,7 @@ Return a single, valid JSON object with 'decision', 'reason', and 'next_actions'
 New Ticket:
 {ticket_text}
 """
-    # Return both the prompt and the context string
     return prompt, (context if context else "No relevant past cases found.")
-# --- END MODIFIED ---
 
 @app.post("/sync_ticket")
 def sync_ticket(ticket: Ticket):
@@ -100,7 +102,6 @@ def sync_ticket(ticket: Ticket):
     print(f"Received sync ticket (GEMINI RAG MODE): {ticket.summary}")
     
     try:
-        # --- MODIFIED: Get both prompt and context ---
         prompt, retrieved_context = create_rag_prompt(ticket)
         print("--- Sending prompt to Gemini for sync ticket ---")
         
@@ -120,8 +121,7 @@ def sync_ticket(ticket: Ticket):
         
         result_json = json.loads(response.text)
         result_json["processing_time"] = processing_time
-        result_json["retrieved_context"] = retrieved_context  # <-- ADDED: Pass context to response
-        # --- END MODIFIED ---
+        result_json["retrieved_context"] = retrieved_context
         
         add_to_memory(ticket.summary, response.text)
         
