@@ -55,8 +55,8 @@ with col2:
         
         start_time = time.time() # Start round-trip timer
 
-        # --- NEW: Added spinner for immediate feedback ---
-        with st.spinner("Contacting support... Please wait."):
+        # --- NEW: Define the API call logic as a reusable function ---
+        def make_api_call():
             try:
                 response = requests.post(API_URL, json=ticket_data)
                 
@@ -166,4 +166,14 @@ with col2:
                 st.error("API connection failed. Is the Orchestrator (port 8000) running?")
             except Exception as e:
                 st.error(f"An unexpected error occurred: {e}")
+        
+        # --- NEW: Conditional spinner logic ---
+        if severity == "High":
+            # SYNC: Show spinner while waiting
+            with st.spinner("Contacting support... Please wait."):
+                make_api_call()
+        else:
+            # ASYNC: No spinner, just make the call.
+            # The "queued" status from make_api_call() will appear instantly.
+            make_api_call()
 
