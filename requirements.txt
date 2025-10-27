@@ -3,7 +3,7 @@ uvicorn
 requests
 pydantic
 python-dotenv
-openai
+google-generativeai
 streamlit
 asyncio
 pyngrok
