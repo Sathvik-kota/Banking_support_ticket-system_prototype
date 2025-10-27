@@ -86,6 +86,8 @@ Use the following past cases as context if relevant:
 Now classify this new ticket into:
 1. AI Code Patch
 2. Vibe Workflow
+3. General / Non-Issue — casual greetings, unclear, or unrelated messages.
+
 
 Return a single, valid JSON object with 'decision', 'reason', and 'next_actions' (as a list of strings).
 
