@@ -4,11 +4,8 @@ from pydantic import BaseModel
 import os
 import json
 import time
-
-# --- ADD RAG IMPORTS ---
 from sentence_transformers import SentenceTransformer, util
 import torch
-# --- END RAG IMPORTS ---
 
 # Configure the Gemini client
 try:
@@ -18,7 +15,7 @@ except Exception as e:
     print(f"Error initializing Google Gemini client: {e}")
     genai = None
 
-# --- ADD RAG MODEL + MEMORY ---
+# ADD RAG MODEL + MEMORY
 try:
     embed_model = SentenceTransformer("all-MiniLM-L6-v2")
     memory_store = []  # List of {"text": "...", "embedding": tensor, "response": "..."}
@@ -26,8 +23,6 @@ try:
 except Exception as e:
     print(f"Error loading SentenceTransformer model: {e}")
     embed_model = None
-# --- END RAG ---
-
 
 app = FastAPI(title="Sync Ticket Service (Gemini RAG)")
 
@@ -36,14 +31,12 @@ class Ticket(BaseModel):
     severity: str
     summary: str
 
-# --- RAG HELPER FUNCTIONS ---
+# RAG HELPER FUNCTIONS
 def add_to_memory(ticket_text, response_text):
-    """Adds a new ticket summary and its JSON response to the memory."""
     if not embed_model:
         print("Embed model not loaded, skipping memory add.")
         return
     try:
-        # Use summary for embedding
         embedding = embed_model.encode(ticket_text, convert_to_tensor=True)
         memory_store.append({"text": ticket_text, "embedding": embedding, "response": response_text})
         print(f"Added to memory. New memory size: {len(memory_store)}")
@@ -51,16 +44,13 @@ def add_to_memory(ticket_text, response_text):
         print(f"Error adding to memory: {e}")
 
 def retrieve_context(query_text, top_k=2):
-    """Finds similar past tickets and returns them as string context."""
     if not memory_store or not embed_model:
         print("No memory or embed model, returning empty context.")
         return ""
     try:
         query_emb = embed_model.encode(query_text, convert_to_tensor=True)
-        # Calculate cosine similarities
         sims = [util.cos_sim(query_emb, item["embedding"]).item() for item in memory_store]
         
-        # Get top_k *relevant* matches (similarity > 0.5)
         relevant_indices = [i for i, sim in enumerate(sims) if sim > 0.5]
         top_indices = sorted(relevant_indices, key=lambda i: sims[i], reverse=True)[:top_k]
         
@@ -68,25 +58,20 @@ def retrieve_context(query_text, top_k=2):
             print("No relevant context found.")
             return ""
             
-        # Format the context string
         context = "\n\n".join([f"Past Ticket: {memory_store[i]['text']}\nResponse: {memory_store[i]['response']}" for i in top_indices])
         print(f"Retrieved context: {context}")
         return context
     except Exception as e:
         print(f"Error retrieving context: {e}")
         return ""
-# --- END RAG HELPERS ---
 
-# --- MODIFIED: Prompt builder now uses RAG ---
-def create_rag_prompt(ticket: Ticket) -> str:
-    """Creates the Gemini prompt, now including RAG context."""
-    # Use the summary for finding similar tickets
+# --- MODIFIED: Prompt builder now returns prompt AND context ---
+def create_rag_prompt(ticket: Ticket):
+    """Creates the Gemini prompt and returns the prompt AND the context."""
     context = retrieve_context(ticket.summary)
-    
-    # Create the full ticket text for the prompt
     ticket_text = f"Channel: {ticket.channel}, Severity: {ticket.severity}, Summary: {ticket.summary}"
     
-    return f"""
+    prompt = f"""
 You are an expert banking support assistant.
 
 Use the following past cases as context if relevant:
@@ -103,6 +88,8 @@ Return a single, valid JSON object with 'decision', 'reason', and 'next_actions'
 New Ticket:
 {ticket_text}
 """
+    # Return both the prompt and the context string
+    return prompt, (context if context else "No relevant past cases found.")
 # --- END MODIFIED ---
 
 @app.post("/sync_ticket")
@@ -113,15 +100,14 @@ def sync_ticket(ticket: Ticket):
     print(f"Received sync ticket (GEMINI RAG MODE): {ticket.summary}")
     
     try:
-        # --- MODIFIED: Use new RAG prompt ---
-        prompt = create_rag_prompt(ticket)
+        # --- MODIFIED: Get both prompt and context ---
+        prompt, retrieved_context = create_rag_prompt(ticket)
         print("--- Sending prompt to Gemini for sync ticket ---")
         
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         start_time = time.perf_counter()
         
-        # Request JSON output from Gemini
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -134,12 +120,10 @@ def sync_ticket(ticket: Ticket):
         
         result_json = json.loads(response.text)
         result_json["processing_time"] = processing_time
+        result_json["retrieved_context"] = retrieved_context  # <-- ADDED: Pass context to response
         # --- END MODIFIED ---
         
-        # --- ADDED: Add new result to memory ---
-        # We store the summary and the raw JSON string response
         add_to_memory(ticket.summary, response.text)
-        # --- END ADDED ---
         
         return result_json
 
@@ -147,3 +131,4 @@ def sync_ticket(ticket: Ticket):
         error_msg = str(e)
         print(f"!!! Unexpected Error in classify_ticket (Gemini): {error_msg}")
         raise HTTPException(status_code=500, detail=error_msg)
+
