@@ -14,11 +14,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # --- NEW DEBUGGING STEP ---
-      # Add this step to see exactly what files are in your repository's root
+      # --- THIS IS THE DEBUGGING STEP ---
+      # This step will run and show us exactly what files are in your repo
       - name: List files in the repository
         run: ls -la
-      # --- END NEW STEP ---
+      # --- END DEBUGGING STEP ---
 
       - name: Log in to Hugging Face Docker Registry
         uses: docker/login-action@v3
@@ -30,11 +30,9 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          # --- THIS IS THE FIX ---
-          # Change this from "." to your project's sub-folder
-          # For example, if your code is in a folder named "project_code", 
-          # you would change this to:
-          # context: ./project_code
+          # This line tells Docker to look for your Dockerfile in the main folder.
+          # If the "List files" step shows your code is in a sub-folder,
+          # we will change this line.
           context: . 
           
           push: true
