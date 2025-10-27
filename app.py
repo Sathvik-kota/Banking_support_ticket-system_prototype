@@ -23,9 +23,9 @@ with col1:
         severity_option = st.selectbox(
             "Severity (Determines Processing Path)", 
             [
-                "High (Sync - ~5 sec)", 
-                "Medium (Async - ~30 sec)", 
-                "Low (Async - ~30 sec)"
+                "High (Sync service)", 
+                "Medium (Async - service)", 
+                "Low (Async - service)"
             ]
         )
         
@@ -34,9 +34,9 @@ with col1:
 
 # Map user-friendly option to the API value
 severity_mapping = {
-    "High (Sync - ~5 sec)": "High",
-    "Medium (Async - ~30 sec)": "Medium",
-    "Low (Async - ~30 sec)": "Low"
+    "High (Sync - service)": "High",
+    "Medium (Async - service)": "Medium",
+    "Low (Async - service)": "Low"
 }
 severity = severity_mapping[severity_option]
 
