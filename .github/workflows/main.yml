@@ -1,0 +1,34 @@
+name: Build and Push to Hugging Face Spaces
+
+# This action triggers on every push to your 'main' branch
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allows you to run it manually from the Actions tab
+
+jobs:
+  build-and-push-to-hf:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Hugging Face Docker Registry
+        # This uses the secrets you need to add to your GitHub repo
+        uses: docker/login-action@v3
+        with:
+          registry: registry.hf.space
+          username: ${{ secrets.HF_USERNAME }}
+          password: ${{ secrets.HF_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # This tag is critical. It must match your HF Space ID
+          # Example: Your HF Space URL is hf.co/spaces/MyName/MySpace
+          # Then your tag is: registry.hf.space/myname-myspace:latest
+          tags: registry.hf.space/${{ secrets.HF_SPACE_ID }}:latest
