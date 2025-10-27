@@ -7,7 +7,7 @@ import asyncio
 import time
 from sentence_transformers import SentenceTransformer, util
 import torch
-
+from uuid import uuid4
 # Configure the Gemini client
 try:
     genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
