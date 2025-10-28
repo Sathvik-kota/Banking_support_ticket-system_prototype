@@ -176,4 +176,18 @@ with col2:
             # ASYNC: No spinner, just make the call.
             # The "queued" status from make_api_call() will appear instantly.
             make_api_call()
+# --- Clear Memory Button ---
+CLEAR_MEMORY_URL = "http://localhost:8000/clear_memory" # Orchestrator endpoint
 
+if st.button("Clear RAG Memory"):
+    try:
+        response = requests.post(CLEAR_MEMORY_URL, timeout=10) # Add timeout
+        if response.status_code == 200:
+            st.success("Successfully requested memory clear for both services.")
+            st.json(response.json()) # Show detailed results
+        else:
+            st.error(f"Error clearing memory: {response.status_code} - {response.text}")
+    except Exception as e:
+        st.error(f"Failed to connect to clear memory endpoint: {e}")
+    st.divider() # Add a visual separator
+# --- End Clear Memory Button ---
