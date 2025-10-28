@@ -16,6 +16,20 @@ col1, col2 = st.columns(2)
 
 # --- Column 1: The Form ---
 with col1:
+    # --- Clear Memory Button (Moved Here) ---
+    CLEAR_MEMORY_URL = "http://localhost:8000/clear_memory" # Orchestrator endpoint
+
+    if st.button("Clear RAG Memory"):
+        try:
+            response = requests.post(CLEAR_MEMORY_URL, timeout=10) # Add timeout
+            if response.status_code == 200:
+                st.success("Successfully requested memory clear for both services.")
+                st.json(response.json()) # Show detailed results
+            else:
+                st.error(f"Error clearing memory: {response.status_code} - {response.text}")
+        except Exception as e:
+            st.error(f"Failed to connect to clear memory endpoint: {e}")
+        st.divider() # Add a visual separator
     with st.form(key="ticket_form"):
         channel = st.selectbox("Channel", ["Email", "Chat", "Phone"])
         
@@ -40,21 +54,6 @@ severity_mapping = {
 }
 severity = severity_mapping[severity_option]
 
-# --- Clear Memory Button ---
-CLEAR_MEMORY_URL = "http://localhost:8000/clear_memory" # Orchestrator endpoint
-
-if st.button("Clear RAG Memory"):
-    try:
-        response = requests.post(CLEAR_MEMORY_URL, timeout=10) # Add timeout
-        if response.status_code == 200:
-            st.success("Successfully requested memory clear for both services.")
-            st.json(response.json()) # Show detailed results
-        else:
-            st.error(f"Error clearing memory: {response.status_code} - {response.text}")
-    except Exception as e:
-        st.error(f"Failed to connect to clear memory endpoint: {e}")
-    st.divider() # Add a visual separator
-# --- End Clear Memory Button ---
 
 # ---------- API Call ----------
 API_URL = "http://localhost:8000/ticket"  # Orchestrator
