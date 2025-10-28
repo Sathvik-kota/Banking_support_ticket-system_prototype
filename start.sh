@@ -59,7 +59,9 @@ PYTHON_SCRIPT
 
 # Run the Python wait script
 python /tmp/wait_for_ports.py
+python load_test_sync.py
 
 # Start the Streamlit app in the foreground
 echo "Starting Streamlit UI on port 8501..."
-streamlit run app.py --server.port 8501 --server.headless true --server.add
+streamlit run app.py --server.port 8501 --server.headless true --server.address 0.0.0.0
+
