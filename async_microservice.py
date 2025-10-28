@@ -156,7 +156,7 @@ Summary: {ticket.summary}
 async def classify_ticket_with_gemini_async(ticket: Ticket):
     if not genai:
         print("Worker error: Gemini client not initialized.")
-        return {"error": "Gemini client not initialized"}, "Gemini client not initialized", 0.0 # Added processing_time
+        return {"error": "Gemini client not initialized"}, "Gemini client not initialized", 0.0 # Return 3 values
 
     try:
         # 1. Retrieve context (blocking, run in thread)
@@ -196,11 +196,12 @@ async def classify_ticket_with_gemini_async(ticket: Ticket):
         result_data["processing_time"] = processing_time
         result_data["retrieved_context"] = context_str
         
-        return result_data, None # No error
+        # --- FIX: Return 3 values on success ---
+        return result_data, None, processing_time 
 
     except Exception as e:
         print(f"!!! Unexpected Error in async classify_ticket (Gemini): {e}")
-        # Return error and a processing time of 0.0 or calculate if possible
+        # Return 3 values on error
         return {"error": str(e)}, str(e), 0.0
 
 
@@ -219,8 +220,8 @@ async def worker(worker_id: int):
             results_store[ticket_id] = {"status": "processing"}
 
             try:
-                # Unpack the tuple: result_data, error_detail, processing_time (discard time here, it's in result_data)
-                result_data, error_detail, _ = await classify_ticket_with_gemini_async(ticket) 
+                # Unpack the tuple (now always 3 values)
+                result_data, error_detail, processing_time = await classify_ticket_with_gemini_async(ticket) 
                 
                 if error_detail:
                     results_store[ticket_id] = {"status": "error", "detail": error_detail}
