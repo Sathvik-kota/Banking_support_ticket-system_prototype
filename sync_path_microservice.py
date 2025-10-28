@@ -216,10 +216,4 @@ def sync_ticket(ticket: Ticket):
     except Exception as e:
         print(f"--- Error processing sync ticket: {e} ---")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
-@app.post("/clear_memory")
-def clear_sync_memory():
-    global memory_store
-    print(f"Clearing sync memory (current size: {len(memory_store)}).")
-    memory_store = []
-    return {"status": "Sync memory cleared"}
 
