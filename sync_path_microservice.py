@@ -95,7 +95,7 @@ def retrieve_context(query_text, top_k=2):
         # This ensures we only consider truly relevant cases
         relevant_indices = [
             i for i in all_indices_sorted
-            if sims[i] >= 0.75 and sims[i] < 0.99  # Strict similarity threshold
+            if sims[i] >= 0.70 and sims[i] < 0.99  # Strict similarity threshold
         ][:top_k]  # Take only top_k AFTER filtering
 
         if not relevant_indices:
