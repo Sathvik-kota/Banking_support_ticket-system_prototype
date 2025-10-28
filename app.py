@@ -5,12 +5,62 @@ import json
 
 # --- THIS IS THE NEW LINE ---
 st.set_page_config(layout="wide")
-# ----------------------------
-# ---------- NEW: Landing Page Section ----------
-st.markdown("<h1 style='text-align: center; color: #4CAF50;'>FinAssist</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center;'>Your AI-Powered Banking Support Assistant</p>", unsafe_allow_html=True)
-st.divider() # Visual separator
-# ---------- END NEW Section ----------
+# 1. Initialize session state for initial load tracking
+if 'initial_load_complete' not in st.session_state:
+    st.session_state.initial_load_complete = False
+
+if not st.session_state.initial_load_complete:
+    # 2. Create a full-page temporary placeholder for the landing page
+    # This acts like an overlay that captures the entire output area until it's cleared.
+    landing_placeholder = st.empty()
+    
+    with landing_placeholder.container():
+        # Display the landing page content with custom styling
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                text-align: center;
+                background-color: #f0f2f6; /* Light gray background */
+                padding: 2rem;
+            ">
+                <h1 style='color: #4CAF50; font-size: 3em;'>FinAssist</h1>
+                <p style='font-size: 1.5em; color: #333;'>Your AI-Powered Banking Support Assistant</p>
+                <div style="margin-top: 2rem;">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            <style>
+                /* Simple CSS for a clean look and a basic spinner */
+                .spinner {
+                    border: 4px solid rgba(0, 0, 0, 0.1);
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    border-left-color: #4CAF50;
+                    animation: spin 1s ease-in-out infinite;
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            </style>
+            """, 
+            unsafe_allow_html=True
+        )
+
+    # 3. Wait for 4 seconds
+    time.sleep(4)
+    
+    # 4. Clear the landing page, set the state flag, and immediately rerun
+    landing_placeholder.empty()
+    st.session_state.initial_load_complete = True
+    st.experimental_rerun()
+    
+# If initial_load_complete is True, the script continues to the main application below.
 # ---------- Streamlit Layout ----------
 st.title("Banking Support Ticket System")
 st.subheader("Submit a Ticket")
