@@ -15,7 +15,6 @@ echo "Starting Sync Service on port 8001..."
 gunicorn -k uvicorn.workers.UvicornWorker sync_path_microservice:app \
   --workers 2 \
   --threads 2 \
-  --timeout 120 \
   --bind 0.0.0.0:8001
 
 echo "Starting Async Service on port 8002..."
