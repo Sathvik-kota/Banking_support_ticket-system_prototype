@@ -12,7 +12,7 @@ ORCHESTRATOR_URL = "http://127.0.0.1:8000/ticket"
 payloads = [
     {
         "channel": "web",
-        "severity": random.choice(["high", "low"]),
+        "severity": "high",
         "summary": f"Test orchestrator ticket #{i}"
     }
     for i in range(16)
