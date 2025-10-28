@@ -13,7 +13,7 @@ echo "Starting Sync Service on port 8001..."
 # Using the filename from your log: sync_path_microservice.py
 #uvicorn sync_path_microservice:app --host 0.0.0.0 --port 8001 &
 gunicorn -k uvicorn.workers.UvicornWorker sync_path_microservice:app \
-  --workers 4 \
+  --workers 2 \
   --threads 2 \
   --timeout 120 \
   --bind 0.0.0.0:8001
@@ -22,7 +22,7 @@ echo "Starting Async Service on port 8002..."
 # Using the filename from your log: async_microservice.py
 uvicorn async_microservice:app --host 0.0.0.0 --port 8002 &
 
-sleep 25
+sleep 16
 
 python load_test_sync.py
 
