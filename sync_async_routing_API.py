@@ -56,3 +56,37 @@ def get_async_result(ticket_id: str):
         print(f"Error connecting to async result service: {e}")
         # If the async service can't be reached
         raise HTTPException(status_code=503, detail="Async service unavailable")
+# --- NEW ENDPOINT TO CLEAR MEMORY IN BOTH SERVICES ---
+@app.post("/clear_memory")
+def clear_all_memory():
+    """Calls the clear_memory endpoint on both sync and async services."""
+    sync_url = f"{SYNC_SERVICE_URL}/clear_memory"
+    async_url = f"{ASYNC_SERVICE_URL}/clear_memory"
+    results = {}
+
+    # Try clearing sync memory
+    try:
+        print(f"Attempting to clear sync memory at {sync_url}")
+        sync_resp = requests.post(sync_url, timeout=5) # Add timeout
+        sync_resp.raise_for_status()
+        results["sync_clear"] = sync_resp.json()
+        print("Sync memory clear request successful.")
+    except Exception as e:
+        print(f"Error clearing sync memory: {e}")
+        results["sync_clear"] = {"status": "error", "detail": str(e)}
+
+    # Try clearing async memory
+    try:
+        print(f"Attempting to clear async memory at {async_url}")
+        async_resp = requests.post(async_url, timeout=5) # Add timeout
+        async_resp.raise_for_status()
+        results["async_clear"] = async_resp.json()
+        print("Async memory clear request successful.")
+    except Exception as e:
+        print(f"Error clearing async memory: {e}")
+        results["async_clear"] = {"status": "error", "detail": str(e)}
+
+    return results
+# --- END NEW ENDPOINT ---
+
+
