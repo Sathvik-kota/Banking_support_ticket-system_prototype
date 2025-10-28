@@ -10,3 +10,4 @@ asyncio
 pyngrok
 sentence-transformers
 torch
+aiohttp
