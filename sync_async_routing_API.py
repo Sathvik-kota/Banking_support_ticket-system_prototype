@@ -3,6 +3,8 @@ from pydantic import BaseModel
 import requests
 from fastapi.middleware.cors import CORSMiddleware
 
+
+app = FastAPI(title="Ticket Routing Service (Orchestrator)")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -10,8 +12,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app = FastAPI(title="Ticket Routing Service (Orchestrator)")
-
 # ---------- Ticket Model ----------
 class Ticket(BaseModel):
     channel: str
