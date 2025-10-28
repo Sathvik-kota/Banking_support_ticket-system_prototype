@@ -93,11 +93,14 @@ def retrieve_context(query_text, top_k=2):
         
         top_indices = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
 
-        # Filter out self-similarity (score > 0.99)
-        relevant_indices = [i for i in top_indices if sims[i] < 0.99]
+        # Filter out self-similarity (score > 0.99) AND add the 80% threshold
+        relevant_indices = [
+            i for i in top_indices 
+            if sims[i] < 0.99 and sims[i] > 0.80 # Only keep if similarity > 80%
+        ]
 
         if not relevant_indices:
-             print("No relevant context found after filtering self-similarity.")
+             print("No context found above 80% similarity threshold.")
              return "No relevant past cases found."
 
         # Build context string
@@ -105,7 +108,7 @@ def retrieve_context(query_text, top_k=2):
             f"Past Ticket: {memory_store[i]['text']}\nPast Response: {memory_store[i]['response']}" 
             for i in relevant_indices
         ])
-        print(f"Retrieved context for async prompt: {context}")
+        print(f"Retrieved context for async prompt (Similarity > 80%): {context}")
         return context
     except Exception as e:
         print(f"Error retrieving context: {e}")
