@@ -6,7 +6,11 @@ import json
 # --- THIS IS THE NEW LINE ---
 st.set_page_config(layout="wide")
 # ----------------------------
-
+# ---------- NEW: Landing Page Section ----------
+st.markdown("<h1 style='text-align: center; color: #4CAF50;'>FinAssist</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Your AI-Powered Banking Support Assistant</p>", unsafe_allow_html=True)
+st.divider() # Visual separator
+# ---------- END NEW Section ----------
 # ---------- Streamlit Layout ----------
 st.title("Banking Support Ticket System")
 st.subheader("Submit a Ticket")
