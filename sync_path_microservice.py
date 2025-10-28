@@ -143,6 +143,10 @@ def classify_ticket_with_gemini(ticket: Ticket):
     # 3. Call Gemini
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
+        
+        # --- TIMER FIX: Start timer *just* before the API call ---
+        start_time = time.time()
+        
         response = model.generate_content(
             prompt,
             generation_config=genai.GenerationConfig(
@@ -150,6 +154,10 @@ def classify_ticket_with_gemini(ticket: Ticket):
                 response_schema=TICKET_SCHEMA
             )
         )
+        
+        # --- TIMER FIX: End timer *immediately* after the API call ---
+        processing_time = time.time() - start_time
+        print(f"Gemini API processing time: {processing_time:.2f}s")
         
         # 4. Parse the JSON
         # The response.text *is* the JSON string
@@ -159,7 +167,11 @@ def classify_ticket_with_gemini(ticket: Ticket):
         # 5. Add to memory *after* a successful classification
         add_to_memory(ticket.summary, result_json_str)
         
-        return result_data, context_str
+        # Add the *correct* processing time to the result
+        result_data["processing_time"] = processing_time
+        result_data["retrieved_context"] = context_str
+        
+        return result_data
 
     except google.api_core.exceptions.NotFound as e:
         print(f"!!! Model not found error: {e}")
@@ -172,16 +184,9 @@ def classify_ticket_with_gemini(ticket: Ticket):
 def sync_ticket(ticket: Ticket):
     print(f"Received sync ticket (GEMINI RAG MODE): {ticket.summary}")
     
-    start_time = time.time()
-    
     try:
-        result_data, retrieved_context = classify_ticket_with_gemini(ticket)
-        
-        processing_time = time.time() - start_time
-        
-        # Add the new fields to the response
-        result_data["processing_time"] = processing_time
-        result_data["retrieved_context"] = retrieved_context
+        # The processing time is now correctly calculated *inside* this function
+        result_data = classify_ticket_with_gemini(ticket)
         
         return result_data
 
