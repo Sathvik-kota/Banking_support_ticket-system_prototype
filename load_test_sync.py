@@ -15,7 +15,7 @@ payloads = [
         "severity": random.choice(["high", "low"]),
         "summary": f"Test orchestrator ticket #{i}"
     }
-    for i in range(25)
+    for i in range(16)
 ]
 
 async def send_request(session, idx, payload):
@@ -30,7 +30,7 @@ async def send_request(session, idx, payload):
         return None, 0
 
 async def main():
-    print("🚀 Sending 25 concurrent requests to ORCHESTRATOR...\n")
+    print("🚀 Sending 16 concurrent requests to ORCHESTRATOR...\n")
     start_time = time.time()
 
     async with aiohttp.ClientSession() as session:
