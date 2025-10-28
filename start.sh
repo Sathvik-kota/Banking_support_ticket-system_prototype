@@ -1,8 +1,15 @@
-#!/bin/bash
+#!/bin.bash
 
 # Set the environment variable from the HF Secret
 # This is crucial for your Gemini calls to work
 export GOOGLE_API_KEY=$GOOGLE_API_KEY
+
+# --- INSTALL CURL ---
+# The wait script below uses 'curl' to check if services are online.
+# We must install it first, as it's not in the base container.
+echo "Installing curl..."
+apt-get update && apt-get install -y curl
+# --- END INSTALL ---
 
 # Start the 3 backend FastAPI services in the background
 # The '&' symbol runs them as background processes.
@@ -67,3 +74,4 @@ echo "All backend services are up!"
 # Hugging Face will route traffic to this port (8501).
 echo "Starting Streamlit UI on port 8501..."
 streamlit run app.py --server.port 8501 --server.headless true --server.address 0.0.0.0
+
