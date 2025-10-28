@@ -18,23 +18,16 @@ if not st.session_state.initial_load_complete:
         # Display the landing page content with custom styling
         st.markdown(
             """
-            <div style="
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                text-align: center;
-                background-color: #f0f2f6; /* Light gray background */
-                padding: 2rem;
-            ">
-                <h1 style='color: #4CAF50; font-size: 3em;'>FinAssist</h1>
-                <p style='font-size: 1.5em; color: #333;'>Your AI-Powered Banking Support Assistant</p>
-                <div style="margin-top: 2rem;">
-                    <div class="spinner"></div>
-                </div>
-            </div>
             <style>
+                /* CSS FIX: Remove Streamlit's default padding from the main container to allow 
+                   the landing page to sit flush against the top and sides of the window. */
+                .block-container {
+                    padding-top: 0rem;
+                    padding-bottom: 0rem;
+                    padding-left: 0rem;
+                    padding-right: 0rem;
+                }
+
                 /* Simple CSS for a clean look and a basic spinner */
                 .spinner {
                     border: 4px solid rgba(0, 0, 0, 0.1);
@@ -48,6 +41,23 @@ if not st.session_state.initial_load_complete:
                     to { transform: rotate(360deg); }
                 }
             </style>
+            <div style="
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                width: 100vw; /* Ensure it takes full width */
+                text-align: center;
+                background-color: #f0f2f6; /* Light gray background */
+                padding: 2rem;
+            ">
+                <h1 style='color: #4CAF50; font-size: 3em;'>FinAssist</h1>
+                <p style='font-size: 1.5em; color: #333;'>Your AI-Powered Banking Support Assistant</p>
+                <div style="margin-top: 2rem;">
+                    <div class="spinner"></div>
+                </div>
+            </div>
             """, 
             unsafe_allow_html=True
         )
