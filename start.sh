@@ -22,7 +22,7 @@ echo "Starting Async Service on port 8002..."
 # Using the filename from your log: async_microservice.py
 uvicorn async_microservice:app --host 0.0.0.0 --port 8002 &
 
-sleep 15
+sleep 25
 
 python load_test_sync.py
 
