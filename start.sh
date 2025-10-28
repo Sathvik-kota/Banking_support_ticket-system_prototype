@@ -1,4 +1,4 @@
-#!/bin.bash
+#!/bin/bash
 
 # Set the environment variable from the HF Secret
 # This is crucial for your Gemini calls to work
@@ -74,4 +74,3 @@ echo "All backend services are up!"
 # Hugging Face will route traffic to this port (8501).
 echo "Starting Streamlit UI on port 8501..."
 streamlit run app.py --server.port 8501 --server.headless true --server.address 0.0.0.0
-
