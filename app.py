@@ -58,7 +58,7 @@ if not st.session_state.initial_load_complete:
     # 4. Clear the landing page, set the state flag, and immediately rerun
     landing_placeholder.empty()
     st.session_state.initial_load_complete = True
-    st.experimental_rerun()
+    st.rerun() 
     
 # If initial_load_complete is True, the script continues to the main application below.
 # ---------- Streamlit Layout ----------
