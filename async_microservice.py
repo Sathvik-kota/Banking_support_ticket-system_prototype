@@ -80,42 +80,52 @@ def add_to_memory(ticket_text, response_json):
     except Exception as e:
         print(f"Error adding to memory: {e}")
 
+# --- UPDATED retrieve_context function ---
 def retrieve_context(query_text, top_k=2):
     if not embed_model or not memory_store:
         print("No memory or embed model, returning empty context.")
         return "No relevant past cases found."
     
     try:
-        # Note: encode() is a blocking CPU-bound operation
+        # Encode the query
         query_emb = embed_model.encode(query_text, convert_to_tensor=True)
         
+        # Calculate similarities
         sims = [util.cos_sim(query_emb, item["embedding"]).item() for item in memory_store]
         
         # Log the raw scores for debugging
         print(f"Raw similarity scores for '{query_text}': {sims}")
 
-        top_indices = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
+        # Get ALL indices sorted by similarity (not just top_k)
+        all_indices_sorted = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)
 
-        # Filter out self-similarity (score > 0.99) AND use the NEW 90% threshold
+        # Filter FIRST, then take top_k from filtered results
+        # This ensures we only consider truly relevant cases
         relevant_indices = [
-            i for i in top_indices 
-            if sims[i] < 0.99 and sims[i] > 0.90 # <-- Increased threshold
-        ]
+            i for i in all_indices_sorted
+            if sims[i] >= 0.90 and sims[i] < 0.99  # Strict similarity threshold
+        ][:top_k]  # Take only top_k AFTER filtering
 
         if not relevant_indices:
-             print("No context found above 90% similarity threshold.") # <-- Updated log message
-             return "No relevant past cases found."
+            print(f"No context found above 90% similarity threshold. Best score was: {max(sims) if sims else 'N/A'}")
+            return "No relevant past cases found."
 
-        # Build context string
-        context = "\n\n".join([
-            f"Past Ticket: {memory_store[i]['text']}\nPast Response: {memory_store[i]['response']}" 
-            for i in relevant_indices
-        ])
-        print(f"Retrieved context for async prompt (Similarity > 90%): {context}") # <-- Updated log message
+        # Build context string with similarity scores for transparency
+        context_parts = []
+        for i in relevant_indices:
+            context_parts.append(
+                f"Past Ticket (similarity: {sims[i]:.2f}): {memory_store[i]['text']}\n"
+                f"Past Response: {memory_store[i]['response']}"
+            )
+        
+        context = "\n\n".join(context_parts)
+        print(f"Retrieved {len(relevant_indices)} relevant context(s) for async prompt")
         return context
+        
     except Exception as e:
         print(f"Error retrieving context: {e}")
         return "Error retrieving context."
+# --- END UPDATED ---
 
 # --- THIS IS THE NEW, BETTER PROMPT ---
 def build_rag_prompt(ticket: Ticket, context: str) -> str:
