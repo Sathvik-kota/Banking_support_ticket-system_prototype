@@ -21,7 +21,7 @@ uvicorn async_microservice:app --host 0.0.0.0 --port 8002 &
 
 
 # Wait a bit for services to start
-sleep 7
+sleep 15
 
 echo "Running load test..."
 python load_test_sync.py  # your 25-request script
