@@ -91,16 +91,19 @@ def retrieve_context(query_text, top_k=2):
         
         sims = [util.cos_sim(query_emb, item["embedding"]).item() for item in memory_store]
         
+        # Log the raw scores for debugging
+        print(f"Raw similarity scores for '{query_text}': {sims}")
+
         top_indices = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
 
-        # Filter out self-similarity (score > 0.99) AND add the 80% threshold
+        # Filter out self-similarity (score > 0.99) AND use the NEW 90% threshold
         relevant_indices = [
             i for i in top_indices 
-            if sims[i] < 0.99 and sims[i] > 0.80 # Only keep if similarity > 80%
+            if sims[i] < 0.99 and sims[i] > 0.90 # <-- Increased threshold
         ]
 
         if not relevant_indices:
-             print("No context found above 80% similarity threshold.")
+             print("No context found above 90% similarity threshold.") # <-- Updated log message
              return "No relevant past cases found."
 
         # Build context string
@@ -108,7 +111,7 @@ def retrieve_context(query_text, top_k=2):
             f"Past Ticket: {memory_store[i]['text']}\nPast Response: {memory_store[i]['response']}" 
             for i in relevant_indices
         ])
-        print(f"Retrieved context for async prompt (Similarity > 80%): {context}")
+        print(f"Retrieved context for async prompt (Similarity > 90%): {context}") # <-- Updated log message
         return context
     except Exception as e:
         print(f"Error retrieving context: {e}")
