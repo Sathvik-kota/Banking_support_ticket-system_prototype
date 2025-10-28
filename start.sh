@@ -9,12 +9,10 @@ export GOOGLE_API_KEY=$GOOGLE_API_KEY
 echo "Starting Orchestrator on port 8000..."
 uvicorn sync_async_routing_API:app --host 0.0.0.0 --port 8000 &
 
-echo "Starting Sync Service on port 8001..."
-# Using the filename from your log: sync_path_microservice.py
-uvicorn sync_path_microservice:app --host 0.0.0.0 --port 8001 &
-# Add multiple worker processes (not threads)
-#uvicorn sync_path_microservice:app --host 0.0.0.0 --port 8001 --workers 4 &
-
+gunicorn -k uvicorn.workers.UvicornWorker sync_path_microservice:app \
+  --workers 2 \
+  --threads 2 \
+  --bind 0.0.0.0:8001 &
 
 echo "Starting Async Service on port 8002..."
 # Using the filename from your log: async_microservice.py
