@@ -14,9 +14,17 @@ gunicorn -k uvicorn.workers.UvicornWorker sync_path_microservice:app \
   --threads 2 \
   --bind 0.0.0.0:8001 &
 
+
 echo "Starting Async Service on port 8002..."
 # Using the filename from your log: async_microservice.py
 uvicorn async_microservice:app --host 0.0.0.0 --port 8002 &
+
+
+# Wait a bit for services to start
+sleep 7
+
+echo "Running load test..."
+python load_test.py  # your 25-request script
 
 # Start the Streamlit app in the foreground
 # This is the main process that will keep the container running.
