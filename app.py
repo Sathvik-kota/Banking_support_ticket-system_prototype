@@ -12,23 +12,8 @@ st.title("Banking Support Ticket System")
 # --- Use Columns for Layout ---
 col1, col2 = st.columns(2)
 
+# --- Left Column: Form and Clear Button ---
 with col1:
-    # --- Clear Memory Button ---
-    CLEAR_MEMORY_URL = "http://localhost:8000/clear_memory" # Orchestrator endpoint
-
-    if st.button("Clear RAG Memory"):
-        try:
-            response = requests.post(CLEAR_MEMORY_URL, timeout=10) # Add timeout
-            if response.status_code == 200:
-                st.success("Successfully requested memory clear for both services.")
-                st.json(response.json()) # Show detailed results
-            else:
-                st.error(f"Error clearing memory: {response.status_code} - {response.text}")
-        except Exception as e:
-            st.error(f"Failed to connect to clear memory endpoint: {e}")
-        st.divider() # Add a visual separator
-    # --- End Clear Memory Button ---
-
     st.subheader("Submit a Ticket")
     # Ticket input form
     with st.form(key="ticket_form"):
@@ -55,7 +40,24 @@ with col1:
     }
     severity = severity_mapping[severity_option]
 
-# --- API Call and Results Display in Column 2 ---
+    # --- Clear Memory Button (Moved Here) ---
+    st.divider() # Add a visual separator above the button
+    CLEAR_MEMORY_URL = "http://localhost:8000/clear_memory" # Orchestrator endpoint
+
+    if st.button("Clear RAG Memory"):
+        try:
+            response = requests.post(CLEAR_MEMORY_URL, timeout=10) # Add timeout
+            if response.status_code == 200:
+                st.success("Successfully requested memory clear for both services.")
+                st.json(response.json()) # Show detailed results
+            else:
+                st.error(f"Error clearing memory: {response.status_code} - {response.text}")
+        except Exception as e:
+            st.error(f"Failed to connect to clear memory endpoint: {e}")
+    # --- End Clear Memory Button ---
+
+
+# --- Right Column: API Call and Results Display ---
 with col2:
     st.subheader("Results")
     # Use ONE main placeholder in the results column for all dynamic content
