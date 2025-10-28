@@ -8,7 +8,7 @@ import time
 from sentence_transformers import SentenceTransformer, util
 import torch
 import asyncio
-import asyncio.to_thread # Use this for running blocking code in async
+# Removed: import asyncio.to_thread # Use this for running blocking code in async
 from uuid import uuid4
 
 # --- RAG Memory (Global for the service) ---
