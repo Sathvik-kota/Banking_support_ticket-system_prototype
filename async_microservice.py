@@ -8,7 +8,6 @@ import time
 from sentence_transformers import SentenceTransformer, util
 import torch
 import asyncio
-# Removed: import asyncio.to_thread # Use this for running blocking code in async
 from uuid import uuid4
 
 # --- RAG Memory (Global for the service) ---
@@ -68,19 +67,23 @@ def add_to_memory(ticket_text, response_json):
     if not embed_model:
         print("No embed model, skipping add_to_memory.")
         return
+    
+    # Skip storing vague/empty tickets - NOISE FILTER
+    if len(ticket_text.strip()) < 10 or ticket_text.strip().lower() in ['hi', 'hello', 'hey', 'test']:
+        print(f"Skipping storage of vague ticket: '{ticket_text}'")
+        return
+        
     try:
-        # Note: encode() is a blocking CPU-bound operation
         embedding = embed_model.encode(ticket_text, convert_to_tensor=True)
         memory_store.append({
             "text": ticket_text,
             "embedding": embedding,
-            "response": response_json  # Store the full JSON string
+            "response": response_json
         })
         print(f"Added to async memory. Memory size: {len(memory_store)}")
     except Exception as e:
         print(f"Error adding to memory: {e}")
 
-# --- UPDATED retrieve_context function ---
 def retrieve_context(query_text, top_k=2):
     if not embed_model or not memory_store:
         print("No memory or embed model, returning empty context.")
@@ -96,21 +99,21 @@ def retrieve_context(query_text, top_k=2):
         # Log the raw scores for debugging
         print(f"Raw similarity scores for '{query_text}': {sims}")
 
-        # Get ALL indices sorted by similarity (not just top_k)
+        # Get ALL indices sorted by similarity
         all_indices_sorted = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)
 
-        # Filter FIRST, then take top_k from filtered results
-        # This ensures we only consider truly relevant cases
+        # Filter FIRST by threshold, then take top_k
         relevant_indices = [
             i for i in all_indices_sorted
-            if sims[i] >= 0.90 and sims[i] < 0.99  # Strict similarity threshold
-        ][:top_k]  # Take only top_k AFTER filtering
+            if sims[i] >= 0.90 and sims[i] < 0.99
+        ][:top_k]
 
         if not relevant_indices:
-            print(f"No context found above 90% similarity threshold. Best score was: {max(sims) if sims else 'N/A'}")
+            best_score = max(sims) if sims else 0.0
+            print(f"No context found above 90% similarity. Best score: {best_score:.2f}")
             return "No relevant past cases found."
 
-        # Build context string with similarity scores for transparency
+        # Build context string with similarity scores
         context_parts = []
         for i in relevant_indices:
             context_parts.append(
@@ -119,44 +122,44 @@ def retrieve_context(query_text, top_k=2):
             )
         
         context = "\n\n".join(context_parts)
-        print(f"Retrieved {len(relevant_indices)} relevant context(s) for async prompt")
+        print(f"Retrieved {len(relevant_indices)} relevant context(s)")
         return context
         
     except Exception as e:
         print(f"Error retrieving context: {e}")
         return "Error retrieving context."
-# --- END UPDATED ---
 
-# --- THIS IS THE NEW, BETTER PROMPT ---
+# --- UPDATED PROMPT WITH STRONGER NOISE REJECTION ---
 def build_rag_prompt(ticket: Ticket, context: str) -> str:
-    return f"""
-You are an expert banking support assistant. Your job is to classify a new ticket.
+    return f"""You are an expert banking support assistant. Your job is to classify a new ticket.
 You must choose one of three categories:
-1.  AI Code Patch: Select this for technical bugs, API errors, code-related problems, or system failures.
-2.  Vibe Workflow: Select this for standard customer requests (e.g., "unblock my card," "payment failed," "reset password," or general banking inquiries).
-3.  Unknown: Select this for random, vague, or irrelevant tickets (e.g., messages like "hi", "hello", or non-descriptive/empty queries).
+1. AI Code Patch: Select this for technical bugs, API errors, code-related problems, or system failures.
+2. Vibe Workflow: Select this for standard customer requests (e.g., "unblock my card," "payment failed," "reset password," or general banking inquiries).
+3. Unknown: Select this for random, vague, or irrelevant tickets (e.g., messages like "hi", "hello", or non-descriptive/empty queries).
 
-Use the following past cases as context if relevant:
+Use the following past cases as context ONLY if they are relevant:
 ---
 {context}
 ---
-Important Instructions:
-- If the retrieval context is irrelevant or noisy, ignore it and focus only on the provided ticket information.
-- Do NOT guess if any information is missing or unclear.
-- If information is insufficient, respond with the category "Unknown" with a clear reason.
 
-Now classify this new ticket. Return only the valid JSON response.
+CRITICAL INSTRUCTIONS:
+- If the retrieval context is irrelevant or noisy, IGNORE IT completely and focus ONLY on the current ticket.
+- Do NOT guess if information is missing or unclear.
+- If the ticket summary is vague, incomplete, or just a greeting, classify as "Unknown".
+- Base your decision primarily on the NEW TICKET information, not the past context.
+
+Now classify this new ticket. Return only valid JSON.
+
 New Ticket:
 Channel: {ticket.channel}
 Severity: {ticket.severity}
 Summary: {ticket.summary}
 """
-# ----------------------------------------
 
 async def classify_ticket_with_gemini_async(ticket: Ticket):
     if not genai:
         print("Worker error: Gemini client not initialized.")
-        return {"error": "Gemini client not initialized"}, "Gemini client not initialized", 0.0 # Added processing_time
+        return {"error": "Gemini client not initialized"}, "Gemini client not initialized", 0.0
 
     try:
         # 1. Retrieve context (blocking, run in thread)
@@ -167,7 +170,7 @@ async def classify_ticket_with_gemini_async(ticket: Ticket):
         
         # 3. Call Gemini (blocking, run in thread)
         def gemini_call():
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            model = genai.GenerativeModel("gemini-2.0-flash-exp")
             response = model.generate_content(
                 prompt,
                 generation_config=genai.GenerationConfig(
@@ -177,13 +180,10 @@ async def classify_ticket_with_gemini_async(ticket: Ticket):
             )
             return response.text
 
-        # --- TIMER FIX: Start timer *just* before the API call thread ---
         start_time = time.time()
-            
         result_json_str = await asyncio.to_thread(gemini_call)
-        
-        # --- TIMER FIX: End timer *immediately* after the API call thread ---
         processing_time = time.time() - start_time
+        
         print(f"Gemini API processing time (async): {processing_time:.2f}s")
         
         # 4. Parse the JSON
@@ -192,17 +192,15 @@ async def classify_ticket_with_gemini_async(ticket: Ticket):
         # 5. Add to memory *after* (blocking, run in thread)
         await asyncio.to_thread(add_to_memory, ticket.summary, result_json_str)
         
-        # Add the *correct* processing time and context to the result
+        # Add processing time and context to result
         result_data["processing_time"] = processing_time
         result_data["retrieved_context"] = context_str
         
-        return result_data, None # No error
+        return result_data, None
 
     except Exception as e:
         print(f"!!! Unexpected Error in async classify_ticket (Gemini): {e}")
-        # Return error and a processing time of 0.0 or calculate if possible
         return {"error": str(e)}, str(e), 0.0
-
 
 # Worker function
 async def worker(worker_id: int):
@@ -219,7 +217,6 @@ async def worker(worker_id: int):
             results_store[ticket_id] = {"status": "processing"}
 
             try:
-                # Unpack the tuple: result_data, error_detail, processing_time (discard time here, it's in result_data)
                 result_data, error_detail, _ = await classify_ticket_with_gemini_async(ticket) 
                 
                 if error_detail:
@@ -236,8 +233,7 @@ async def worker(worker_id: int):
                 
         except Exception as e:
             print(f"Worker {worker_id} critical error: {e}")
-            await asyncio.sleep(1) # Prevent tight loop on critical error
-
+            await asyncio.sleep(1)
 
 @app.on_event("startup")
 async def startup_event():
@@ -245,7 +241,6 @@ async def startup_event():
     for i in range(3):
         asyncio.create_task(worker(i))
 
-# Submit ticket (non-blocking)
 @app.post("/async_ticket")
 async def async_ticket(ticket: Ticket):
     ticket_id = str(uuid4())
@@ -253,9 +248,7 @@ async def async_ticket(ticket: Ticket):
     results_store[ticket_id] = {"status": "queued"}
     return {"ticket_id": ticket_id, "status": "queued"}
 
-# Get ticket result
 @app.get("/result/{ticket_id}")
 async def get_result(ticket_id: str):
     result = results_store.get(ticket_id, {"status": "pending"})
     return result
-
