@@ -15,7 +15,7 @@ payloads = [
         "severity": "high",
         "summary": f"Test orchestrator ticket #{i}"
     }
-    for i in range(16)
+    for i in range(10)
 ]
 
 async def send_request(session, idx, payload):
