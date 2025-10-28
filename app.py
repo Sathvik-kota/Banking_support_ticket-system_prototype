@@ -48,6 +48,7 @@ RESULT_URL = "http://localhost:8000/result" # Orchestrator's result endpoint
 
 # --- Column 2: The Results ---
 with col2:
+    st.subheader("Results")
     if submit_button:
         ticket_data = {
             "channel": channel,
