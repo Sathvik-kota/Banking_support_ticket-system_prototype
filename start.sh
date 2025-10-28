@@ -24,7 +24,7 @@ uvicorn async_microservice:app --host 0.0.0.0 --port 8002 &
 sleep 7
 
 echo "Running load test..."
-python load_test.py  # your 25-request script
+python load_test_sync.py  # your 25-request script
 
 # Start the Streamlit app in the foreground
 # This is the main process that will keep the container running.
