@@ -1,112 +1,199 @@
 import google.generativeai as genai
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+import google.api_core.exceptions
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from pydantic import BaseModel, Field
 import os
 import json
-import asyncio
 import time
 from sentence_transformers import SentenceTransformer, util
 import torch
+import asyncio
+import asyncio.to_thread # Use this for running blocking code in async
 from uuid import uuid4
-# Configure the Gemini client
-try:
-    genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
-    print("Google Gemini client initialized successfully.")
-except Exception as e:
-    print(f"Error initializing Google Gemini client: {e}")
-    genai = None
 
-# ADD RAG MODEL + MEMORY
+# --- RAG Memory (Global for the service) ---
 try:
     embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    memory_store = []  # List of {"text": "...", "embedding": tensor, "response": "..."}
     print("SentenceTransformer model loaded successfully.")
 except Exception as e:
-    print(f"Error loading SentenceTransformer model: {e}")
+    print(f"CRITICAL: Failed to load SentenceTransformer model: {e}")
     embed_model = None
 
-app = FastAPI(title="Async Ticket Service (Gemini RAG)")
+memory_store = []  # In-memory store for RAG
+# -------------------------------------------
 
-ticket_queue = asyncio.Queue()
-results_store = {}
+# --- Gemini Configuration ---
+try:
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    if not os.getenv("GOOGLE_API_KEY"):
+        raise ValueError("GOOGLE_API_KEY environment variable not set.")
+    print("Google Gemini client initialized successfully.")
+except Exception as e:
+    print(f"CRITICAL: Failed to initialize Gemini client: {e}")
+    genai = None
+
+# Define the exact JSON structure we want Gemini to return
+class TicketResponse(BaseModel):
+    decision: str = Field(description="The classification category.")
+    reason: str = Field(description="A brief reason for the decision.")
+    next_actions: list[str] = Field(description="A list of next actions.")
+
+TICKET_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "decision": {"type": "STRING"},
+        "reason": {"type": "STRING"},
+        "next_actions": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"}
+        }
+    },
+    "required": ["decision", "reason", "next_actions"]
+}
+# -----------------------------
+
+app = FastAPI(title="Async Ticket Service (RAG + Gemini)")
 
 class Ticket(BaseModel):
     channel: str
     severity: str
     summary: str
 
-# RAG HELPER FUNCTIONS
-def add_to_memory(ticket_text, response_text):
+# In-memory queue and result store
+ticket_queue = asyncio.Queue()
+results_store = {}
+
+# --- RAG Functions (must be sync, will be called in a thread) ---
+def add_to_memory(ticket_text, response_json):
     if not embed_model:
-        print("Embed model not loaded, skipping memory add.")
+        print("No embed model, skipping add_to_memory.")
         return
     try:
+        # Note: encode() is a blocking CPU-bound operation
         embedding = embed_model.encode(ticket_text, convert_to_tensor=True)
-        memory_store.append({"text": ticket_text, "embedding": embedding, "response": response_text})
-        print(f"Added to memory. New memory size: {len(memory_store)}")
+        memory_store.append({
+            "text": ticket_text,
+            "embedding": embedding,
+            "response": response_json  # Store the full JSON string
+        })
+        print(f"Added to async memory. Memory size: {len(memory_store)}")
     except Exception as e:
         print(f"Error adding to memory: {e}")
 
-# --- MODIFIED: retrieve_context function (with fix) ---
 def retrieve_context(query_text, top_k=2):
-    if not memory_store or not embed_model:
+    if not embed_model or not memory_store:
         print("No memory or embed model, returning empty context.")
-        return ""
+        return "No relevant past cases found."
+    
     try:
+        # Note: encode() is a blocking CPU-bound operation
         query_emb = embed_model.encode(query_text, convert_to_tensor=True)
+        
         sims = [util.cos_sim(query_emb, item["embedding"]).item() for item in memory_store]
         
-        # --- FIX: Removed the "sim > 0.5" filter ---
         top_indices = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:top_k]
-        
-        if not top_indices or sims[top_indices[0]] == 0.0:
-            print("No context found (memory store was empty or no similarity).")
-            return ""
-            
-        print(f"Top similarity scores found: {[sims[i] for i in top_indices]}")
-        context = "\n\n".join([f"Past Ticket: {memory_store[i]['text']}\nResponse: {memory_store[i]['response']}" for i in top_indices])
-        print(f"Retrieved context: {context}")
+
+        # Filter out self-similarity (score > 0.99)
+        relevant_indices = [i for i in top_indices if sims[i] < 0.99]
+
+        if not relevant_indices:
+             print("No relevant context found after filtering self-similarity.")
+             return "No relevant past cases found."
+
+        # Build context string
+        context = "\n\n".join([
+            f"Past Ticket: {memory_store[i]['text']}\nPast Response: {memory_store[i]['response']}" 
+            for i in relevant_indices
+        ])
+        print(f"Retrieved context for async prompt: {context}")
         return context
     except Exception as e:
         print(f"Error retrieving context: {e}")
-        return ""
-# --- END MODIFIED ---
+        return "Error retrieving context."
 
-def create_rag_prompt(ticket: Ticket):
-    """Creates the Gemini prompt and returns the prompt AND the context."""
-    context = retrieve_context(ticket.summary)
-    ticket_text = f"Channel: {ticket.channel}, Severity: {ticket.severity}, Summary: {ticket.summary}"
-    
-    prompt = f"""
-You are an expert banking support assistant.
+# --- THIS IS THE NEW, BETTER PROMPT ---
+def build_rag_prompt(ticket: Ticket, context: str) -> str:
+    return f"""
+You are an expert banking support assistant. Your job is to classify a new ticket.
+You must choose one of three categories:
+1.  AI Code Patch: Select this for technical bugs, API errors, code-related problems, or system failures.
+2.  Vibe Workflow: Select this for standard customer requests (e.g., "unblock my card," "payment failed," "reset password," or general banking inquiries).
+3.  Unknown: Select this for random, vague, or irrelevant tickets (e.g., messages like "hi", "hello", or non-descriptive/empty queries).
 
 Use the following past cases as context if relevant:
 ---
-{context if context else "No relevant past cases found."}
+{context}
 ---
+Important Instructions:
+- If the retrieval context is irrelevant or noisy, ignore it and focus only on the provided ticket information.
+- Do NOT guess if any information is missing or unclear.
+- If information is insufficient, respond with the category "Unknown" with a clear reason.
 
-Now classify this new ticket into:
-1. AI Code Patch
-2. Vibe Workflow
-
-
-
-Return a single, valid JSON object with 'decision', 'reason', and 'next_actions' (as a list of strings).
-
+Now classify this new ticket. Return only the valid JSON response.
 New Ticket:
-{ticket_text}
+Channel: {ticket.channel}
+Severity: {ticket.severity}
+Summary: {ticket.summary}
 """
-    return prompt, (context if context else "No relevant past cases found.")
+# ----------------------------------------
+
+async def classify_ticket_with_gemini_async(ticket: Ticket):
+    if not genai:
+        print("Worker error: Gemini client not initialized.")
+        return {"error": "Gemini client not initialized"}, "Gemini client not initialized", 0.0 # Added processing_time
+
+    try:
+        # 1. Retrieve context (blocking, run in thread)
+        context_str = await asyncio.to_thread(retrieve_context, ticket.summary)
+        
+        # 2. Build the prompt
+        prompt = build_rag_prompt(ticket, context_str)
+        
+        # 3. Call Gemini (blocking, run in thread)
+        def gemini_call():
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                    response_schema=TICKET_SCHEMA
+                )
+            )
+            return response.text
+
+        # --- TIMER FIX: Start timer *just* before the API call thread ---
+        start_time = time.time()
+            
+        result_json_str = await asyncio.to_thread(gemini_call)
+        
+        # --- TIMER FIX: End timer *immediately* after the API call thread ---
+        processing_time = time.time() - start_time
+        print(f"Gemini API processing time (async): {processing_time:.2f}s")
+        
+        # 4. Parse the JSON
+        result_data = json.loads(result_json_str)
+        
+        # 5. Add to memory *after* (blocking, run in thread)
+        await asyncio.to_thread(add_to_memory, ticket.summary, result_json_str)
+        
+        # Add the *correct* processing time and context to the result
+        result_data["processing_time"] = processing_time
+        result_data["retrieved_context"] = context_str
+        
+        return result_data, None # No error
+
+    except Exception as e:
+        print(f"!!! Unexpected Error in async classify_ticket (Gemini): {e}")
+        # Return error and a processing time of 0.0 or calculate if possible
+        return {"error": str(e)}, str(e), 0.0
+
 
 # Worker function
 async def worker(worker_id: int):
     print(f"Worker {worker_id} starting...")
     if not genai or not embed_model:
-        print(f"Worker {worker_id}: AI services not initialized. Worker stopping.")
+        print(f"Worker {worker_id}: Client not initialized. Worker stopping.")
         return
-
-    # Use the correct, stable model name
-    model = genai.GenerativeModel('gemini-2.5-flash')
 
     while True:
         try:
@@ -116,42 +203,25 @@ async def worker(worker_id: int):
             results_store[ticket_id] = {"status": "processing"}
 
             try:
-                prompt, retrieved_context = create_rag_prompt(ticket)
+                # Unpack the tuple: result_data, error_detail, processing_time (discard time here, it's in result_data)
+                result_data, error_detail, _ = await classify_ticket_with_gemini_async(ticket) 
                 
-                start_time = time.perf_counter()
-                
-                # Run the blocking generate_content call in a separate thread
-                response = await asyncio.to_thread(
-                    model.generate_content,
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        response_mime_type="application/json",
-                    )
-                )
-                
-                processing_time = time.perf_counter() - start_time
-                print(f"Worker {worker_id} Gemini processing time: {processing_time:.2f}s")
-
-                result_json = json.loads(response.text)
-                result_json["processing_time"] = processing_time
-                result_json["retrieved_context"] = retrieved_context
-                
-                results_store[ticket_id] = {"status": "completed", "result": result_json}
-                
-                # Run blocking add_to_memory in a thread
-                await asyncio.to_thread(add_to_memory, ticket.summary, response.text)
+                if error_detail:
+                    results_store[ticket_id] = {"status": "error", "detail": error_detail}
+                else:
+                    results_store[ticket_id] = {"status": "completed", "result": result_data}
                 
             except Exception as e:
-                error_msg = str(e)
-                print(f"Worker {worker_id} error processing {ticket_id}: {error_msg}")
-                results_store[ticket_id] = {"status": "error", "detail": error_msg}
+                print(f"Worker {worker_id} error processing {ticket_id}: {e}")
+                results_store[ticket_id] = {"status": "error", "detail": str(e)}
             
             finally:
                 ticket_queue.task_done()
                 
         except Exception as e:
             print(f"Worker {worker_id} critical error: {e}")
-            await asyncio.sleep(1)
+            await asyncio.sleep(1) # Prevent tight loop on critical error
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -159,6 +229,7 @@ async def startup_event():
     for i in range(3):
         asyncio.create_task(worker(i))
 
+# Submit ticket (non-blocking)
 @app.post("/async_ticket")
 async def async_ticket(ticket: Ticket):
     ticket_id = str(uuid4())
@@ -166,6 +237,7 @@ async def async_ticket(ticket: Ticket):
     results_store[ticket_id] = {"status": "queued"}
     return {"ticket_id": ticket_id, "status": "queued"}
 
+# Get ticket result
 @app.get("/result/{ticket_id}")
 async def get_result(ticket_id: str):
     result = results_store.get(ticket_id, {"status": "pending"})
