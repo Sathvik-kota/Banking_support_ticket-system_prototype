@@ -9,7 +9,8 @@ uvicorn sync_async_routing_API:app --host 0.0.0.0 --port 8000 &
 
 echo "Starting Sync Service on port 8001..."
 #uvicorn sync_path_microservice:app --host 0.0.0.0 --port 8001 &
-gunicorn -k uvicorn.workers.UvicornWorker sync_path_microservice:app --workers 2 --threads 2 --bind 0.0.0.0:8001
+gunicorn --preload --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8001 sync_path_microservice:app
+
 
 
 echo "Starting Async Service on port 8002..."
