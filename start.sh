@@ -8,10 +8,8 @@ echo "Starting Orchestrator on port 8000..."
 uvicorn sync_async_routing_API:app --host 0.0.0.0 --port 8000 &
 
 echo "Starting Sync Service on port 8001..."
-#uvicorn sync_path_microservice:app --host 0.0.0.0 --port 8001 &
-gunicorn --preload --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8001 sync_path_microservice:app
-
-
+#gunicorn --preload --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8001 sync_path_microservice:app
+uvicorn sync_path_microservice:app --host 0.0.0.0 --port 8001 &
 
 echo "Starting Async Service on port 8002..."
 uvicorn async_microservice:app --host 0.0.0.0 --port 8002 &
