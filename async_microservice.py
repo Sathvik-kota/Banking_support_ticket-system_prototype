@@ -252,33 +252,7 @@ async def async_ticket(ticket: Ticket):
     ticket_id = str(uuid4())
     await ticket_queue.put((ticket_id, ticket))
     results_store[ticket_id] = {"status": "queued"}
-
-    # --- POLLING LOOP: check every 2 seconds (you can tune this) ---
-    for _ in range(5):  # Try up to 5 times → total 10 seconds
-        await asyncio.sleep(2)
-        current_status = results_store.get(ticket_id, {}).get("status")
-        print(f"⏳ Polling... current status = {current_status}")
-        
-        if current_status == "completed":
-            return {
-                "ticket_id": ticket_id,
-                "status": "completed",
-                "result": results_store[ticket_id]["result"]
-            }
-        elif current_status == "error":
-            return {
-                "ticket_id": ticket_id,
-                "status": "error",
-                "detail": results_store[ticket_id].get("detail", "Unknown error")
-            }
-
-    # If still not done after polling
-    return {
-        "ticket_id": ticket_id,
-        "status": "processing",
-        "message": "Still processing, please check /result/{ticket_id} later."
-    }
-
+    return {"ticket_id": ticket_id, "status": "queued"}
 
 # Get ticket result
 @app.get("/result/{ticket_id}")
